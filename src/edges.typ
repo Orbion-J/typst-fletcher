@@ -1263,9 +1263,10 @@
   decorate: auto,
   /// Canvas layer to draw edge on.
   ///
+  /// The default is `-1` to be under nodes.
   /// Edges with equal layer are drawn in the order they are inserted.
   ///
-  /// #frame-row(..(0, 2).map(it => {
+  /// #frame-row(..(-1, 0).map(it => {
   ///   diagram({
   ///     node((0,0), $ times $, fill: yellow)
   ///     edge((-1,0), (+1,0), "->", raw("layer: " + repr(it)), layer: it, label-side: start, label-pos: 0%)
