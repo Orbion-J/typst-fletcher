@@ -138,6 +138,7 @@ To make it easy to achieve common edge shapes, like arcs, loops or right-angled 
     .edges
     .EDGE_KINDS
     .pairs()
+    .filter(((k, v)) => "required" in v)
     .map(((k, v)) => {
       (raw(k), (v.required + v.optional.keys()).map(raw).join(", "))
     })
@@ -147,7 +148,7 @@ To make it easy to achieve common edge shapes, like arcs, loops or right-angled 
 #let edge-kind-examples(examples, ..extra-args) = {
   frame-row(..examples.map(args => align(horizon, {
     diagram(
-      node((0,0), radius: 1pt, fill: black),
+      node((0,0), radius: 5pt, stroke: black),
       edge("->", ..extra-args, ..args, [#raw(repr(args))]),
     )
   })))
@@ -175,6 +176,29 @@ A perfect arc can be made with the `bend` option, which can be an angle (measuri
 ))
 
 
+=== Loop and bow
+
+`edge(pt, loop: angle | direction, size: length)` \
+`edge(pt, bow: angle | direction, size: length)`
+
+Loops and bows are edge kinds with only one vertex.
+The required option `loop` or `bow` specifies the general direction of the edge.
+Loops are circular arcs with diameter `size` and bows are Bézier curves with length `size` as well as an `angle` specifying the narrowness or wideness.
+
+#edge-kind-examples((
+  (loop: right),
+  (loop: 90deg, size: 40pt),
+))
+
+
+
+#edge-kind-examples((
+  (bow: right),
+  (bow: 90deg, size: 20pt),
+  (bow: bottom, angle: 100deg),
+))
+
+
 === Bézier
 
 `edge(.., from: angle | (angle, length), to: angle | (angle, length))`
@@ -191,16 +215,6 @@ Quadratic or cubic Bézier curves can be specified by giving an angle or polar c
 
 You can also specify a Bézier curve through another point with `edge(.., through: <coord>)`.
 
-=== Loop
-
-A perfectly circular loop can be specified by giving either the loop's radius as `loop` or its direction `loop-angle` (which can be an angle or a direction like `"north"` or `right`.)
-
-#edge-kind-examples((
-  (loop: 10pt),
-  (loop-angle: 90deg),
-  (loop-angle: bottom),
-  (loop: -5pt, loop-angle: "south"),
-))
 
 === Corner
 
@@ -221,7 +235,7 @@ Edges with one or two right-angled corners can be specified with `corner`, which
 === CeTZ <cetz-edge>
 
 When @cetz-interop[integrating with CeTZ], you can wrap a CeTZ element in @edge to apply any of fletcher's edge effects to it.
-When used in this mode, edges may have no vertices.
+When used in this mode, edges cannot have vertices.
 
 For example, below we draw a composite CeTZ path using lines and a cubic Bézier segment and apply fletcher's marks, multistroke effects, label placement and snapping.
 #example(```typ

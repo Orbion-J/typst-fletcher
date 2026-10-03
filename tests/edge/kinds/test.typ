@@ -51,16 +51,16 @@ Edge loops
 
   edge(<0>, <1>, $b$, "->"),
   edge(<0>, <2>, $a$, "->"),
-  edge(<1>, $a$, "->", loop-angle: top),
+  edge(<1>, $a$, "->", loop: top),
   edge(<1>, <4>, $a$, "->"),
   edge(<2>, <3>, $a$, "->"),
   edge(<2>, <4>, $b$, "->"),
   edge(<3>, <2>, $b$, "->", label-side: bottom),
-  edge(<3>, $a$, "->", loop-angle: right),
+  edge(<3>, $a$, "->", loop: right),
   edge(<4>, <0>, $a$, "->"),
   edge(<4>, <5>, $b$, "->"),
   edge(<5>, <4>, $a$, "->", label-side: bottom),
-  edge(<5>, $b$, "->", loop-angle: right),
+  edge(<5>, $b$, "->", loop: right),
 )
 
 #pagebreak()

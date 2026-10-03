@@ -5,8 +5,7 @@
   line: (
     draw: (_, vertices) => cetz.draw.line(..vertices)
   ),
-  cetz: (
-  ),
+  cetz: (),
   arc: (
     required: ("bend",),
     optional: (:),
@@ -69,28 +68,45 @@
     },
   ),
   loop: (
-    required: (),
-    optional: (loop: 0.3, loop-angle: 0deg),
+    required: ("loop",),
+    optional: (size: 1.5em),
     n-vertices: 1,
-    validate-args: (ctx, (loop, loop-angle)) => {
+    validate-args: (ctx, (loop, size)) => {
       (
-        loop: cetz.util.resolve-number(ctx, loop),
-        loop-angle: utils.thing-to-angle(loop-angle),
+        loop: utils.thing-to-angle(loop),
+        size: cetz.util.resolve-number(ctx, size)/2,
       )
     },
     pre-snapping-adjust: (edge, snap-objects) => {
       let bounds = cetz.process.aabb.aabb(cetz.path-util.bounds(snap-objects.first().first().segments))
       let diag = cetz.vector.dist(bounds.high, bounds.low)
       let R = diag*0.354 // 1/(2√2)
-      let (loop: l, loop-angle: θ) = edge.shape.args
+      let (loop: θ, size: l) = edge.shape.args
       let d = calc.sqrt(R*R + l*l) - l
       let shift = cetz.vector.scale((calc.cos(θ), calc.sin(θ)), d)
       edge.vertices = edge.vertices.map(pt => cetz.vector.add(pt, shift))
       return edge
     },
-    draw: ((loop, loop-angle), (a, ..)) => {
-      cetz.draw.arc(a, radius: loop, start: loop-angle + 180deg, delta: -360deg)
+    draw: ((loop, size), (a, ..)) => {
+      cetz.draw.arc(a, radius: size, start: loop + 180deg, delta: -360deg)
     },
+  ),
+  bow: (
+    required: ("bow",),
+    optional: (size: 2em, angle: 60deg),
+    n-vertices: 1,
+    validate-args: (ctx, (bow, size, angle)) => {
+      (
+        bow: utils.thing-to-angle(bow),
+        size: cetz.util.resolve-number(ctx, size),
+        angle: angle,
+      )
+    },
+    draw: ((bow, size, angle), (a, _)) => {
+      let c1 = (to: a, rel: (bow + angle/2, size*1.7))
+      let c2 = (to: a, rel: (bow - angle/2, size*1.7))
+      cetz.draw.bezier(a, a, c1, c2)
+    }
   ),
   corner: (
     required: ("corner",),
