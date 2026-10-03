@@ -34,7 +34,6 @@
   label,
   debug: false,
 ) = {
-
   let info = anchors(label.pos, return-info: true)
 
   let tangent-angle = calc.atan2(info.vel.at(0), info.vel.at(1))
@@ -77,7 +76,7 @@
   // 2. resolve label.side to boolean or none/center and resolve anchor
   if label.side == auto {
     // automatically choose label side so that...
-    let  is-curving = cetz.vector.len(info.accel) > 1e-5
+    let is-curving = cetz.vector.len(info.accel) > 1e-5
     if is-curving {
       // ...if the edge is curved, label is on the outer side
       label.side = 0 < (
@@ -127,9 +126,7 @@
     // direction of the label at that point
     let a = utils.thing-to-angle(label.anchor)
     let dir = (calc.cos(a), calc.sin(a), 0)
-    pt = info.multi-stroke-points
-      .sorted(key: pt => cetz.vector.dot(pt, dir))
-      .first()
+    pt = info.multi-stroke-points.sorted(key: pt => cetz.vector.dot(pt, dir)).first()
   }
   pt = cetz.util.revert-transform(ctx.transform, pt)
 
@@ -219,7 +216,7 @@
     amplitude: amplitude-fn,
     stroke: stroke,
     segment-length: wavelength,
-    name: "f"
+    name: "f",
   )
 }
 
@@ -243,13 +240,11 @@
 ) = {
   assert(utils.is-cetz-element(element))
 
-
   shorten = shorten.map(s => cetz.util.resolve-number(ctx, s))
   if shorten.any(s => s != 0) {
     let path = element.drawables.first().segments
     element.drawables.first().segments = cetz.path-util.shorten-to(path, shorten)
   }
-
 
   let (shorten-start, shorten-end, marks) = Marks.draw-marks-on-path(
     ctx,
@@ -271,10 +266,7 @@
     ..extra-path-effect-args,
   )
 
-
-
   let total-length = element.drawables.map(d => cetz.path-util.length(d.segments)).sum(default: 0.)
-
 
   if decorate != none {
     let obj = (ctx => element,)
@@ -292,7 +284,6 @@
     element.drawables = new-obj(ctx).drawables
   }
 
-
   // if crossing-stroke != none {
   //   (ctx => {
   //     let drawables = cetz.process.many(ctx, path).drawables
@@ -306,7 +297,6 @@
 
   // obj
   (ctx => (ctx: ctx, name: element.name, anchors: element.anchors, drawables: element.drawables),)
-
 
   marks
 
@@ -363,10 +353,24 @@
   })
 }
 
+#let apply-pre-snapping-adjustments(ctx, edge, snap-objects) = {
+  if edge.edge-kind.name == "loop" {
 
+    let bounds = cetz.process.aabb.aabb(cetz.path-util.bounds(snap-objects.first().first().segments))
+    let approx-radius = cetz.vector.dist(bounds.high, bounds.low)*0.354 // 1/(2√2)
+    let (R, l) = (approx-radius, edge.edge-kind.args.loop)
+      .map(x => cetz.util.resolve-number(ctx, x))
+    let shift = calc.sqrt(R*R + l*l) - l
+    let θ = edge.edge-kind.args.loop-angle
+    let delta = cetz.vector.scale((calc.cos(θ), calc.sin(θ)), shift)
+    edge.vertices = edge.vertices.map(pt => cetz.vector.add(pt, delta))
+    return edge
+  } else {
+    return edge
+  }
+}
 
 #let apply-edge-snapping(ctx, edge, drawable, snap-to) = {
-
   let get-edge-drawable(edge) = {
     let objs = (edge.draw)(edge.vertices)
     let drawables = cetz.process.element(ctx, objs.first()).drawables
@@ -409,6 +413,8 @@
 
 
 #let draw-edge(ctx, edge) = {
+  let snap-objects = find-snapping-drawables(ctx, ctx.shared-state.fletcher.nodes, edge)
+  edge = apply-pre-snapping-adjustments(ctx, edge, snap-objects)
 
   let objs = (edge.draw)(edge.vertices)
   if objs.len() != 1 { utils.error("edge.draw should return a single CeTZ object") }
@@ -418,7 +424,6 @@
 
   if drawables.len() != 1 { utils.error("edge.draw should return a single drawable") }
   let drawable = drawables.first()
-
 
   if debug-level(edge.debug, "edge.snap") {
     // show where edge would be drawn without any snapping
@@ -436,11 +441,8 @@
     })
   }
 
-  let snap-objects = find-snapping-drawables(ctx, ctx.shared-state.fletcher.nodes, edge)
-
   drawable = apply-edge-snapping(ctx, edge, drawable, snap-objects)
   element.drawables.first() = drawable
-
 
   let crossing-stroke
   if edge.crossing == true {
@@ -449,10 +451,9 @@
       thickness: utils.to-length(
         edge.style.crossing-thickness,
         units-of: edge.style.stroke.thickness,
-      )
+      ),
     ))
   }
-
 
   let scene = apply-edge-effects(
     ctx,
@@ -515,7 +516,6 @@
 }
 
 #let resolve-edge-styles(ctx, edge-data) = {
-
   // resolve styles
   let ctx-style = ctx.style.at("edge", default: (:))
   if "stroke" in ctx-style {
@@ -529,10 +529,12 @@
   )
 
   // resolve extrude to multiples of edge thickness
-  edge-data.style.extrude = utils.one-or-array(
+  edge-data.style.extrude = utils
+    .one-or-array(
       edge-data.style.extrude,
       types: (length, float, int),
-    ).map(e => {
+    )
+    .map(e => {
       if type(e) == length {
         e.to-absolute() / edge-data.style.stroke.thickness.to-absolute()
       } else { e }
@@ -541,7 +543,7 @@
 
   // resolve marks
   edge-data.style.marks = edge-data.style.marks.map(mark => {
-    mark.scale = mark.at("scale", default: 1)*float(edge-data.style.mark-scale)
+    mark.scale = mark.at("scale", default: 1) * float(edge-data.style.mark-scale)
     mark.edge-extrude = edge-data.style.extrude
     Marks.resolve-mark(mark)
   })
@@ -583,9 +585,9 @@
   name: none,
   draw: vertices => none,
   crossing: false,
+  edge-kind: none,
   debug: auto,
 ) = cetz.draw.get-ctx(ctx => {
-
   if "fletcher" not in ctx.shared-state {
     ctx.shared-state.fletcher = (
       pass: none,
@@ -593,7 +595,6 @@
     )
   }
   let fletcher-ctx = ctx.shared-state.fletcher
-
 
   let dummy-anchor-handler = (ctx => (ctx: ctx, name: name, anchors: _ => utils.nans),)
 
@@ -608,7 +609,6 @@
     return
   }
 
-
   let edge-data = (
     class: "edge",
     vertices: vertices,
@@ -618,6 +618,7 @@
     name: name,
     draw: draw,
     crossing: crossing,
+    edge-kind: edge-kind,
     debug: get-debug(ctx, debug),
   )
 
@@ -630,7 +631,6 @@
     // resolve normally, ignoring special no-flip coordinates specific to flexigrids
     edge-data.vertices = edge-data.vertices.map(ignore-no-flip-coords.with(ctx))
   }
-
 
   // resolve auto vertices to prev/next node
   let (first, .., last) = edge-data.vertices
@@ -785,11 +785,10 @@
     }
   }
 
+  let draw-args = (:)
 
   if kind != none {
     let spec = EDGE_KINDS.at(kind)
-
-    let draw-args = (:)
 
     for arg in spec.required { draw-args.insert(arg, named.remove(arg)) }
 
@@ -843,7 +842,14 @@
     options.draw = vertices => cetz.draw.line(..vertices)
   }
 
-  return (draw: options.draw, vertices: options.vertices)
+  return (
+    draw: options.draw,
+    vertices: options.vertices,
+    edge-kind: (
+      name: kind,
+      args: draw-args,
+    ),
+  )
 }
 
 // consumes `label-*` named arguments and validates
@@ -869,7 +875,6 @@
     }
   }
 
-
   let as-label-spec(x) = {
     if x == none {
       return none
@@ -886,9 +891,7 @@
     }
   }
 
-
   let spec = utils.one-or-array(options.label).map(as-label-spec).filter(l => l != none)
-
 
   return (named, spec)
 }
@@ -1377,7 +1380,6 @@
   )
   options += determine-edge-kind(named, options)
 
-
   let args = (
     vertices: options.vertices,
     style: (
@@ -1399,6 +1401,7 @@
     name: options.name,
     draw: options.draw,
     crossing: options.crossing,
+    edge-kind: options.edge-kind,
     debug: debug,
   )
 
