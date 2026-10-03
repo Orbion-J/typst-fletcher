@@ -702,19 +702,23 @@
     required: ("from", "to"),
     optional: (:),
     n-vertices: 2,
+    validate-args: ((from, to)) => {
+      let as-coord(x) = if type(x) == angle { (x, 1) } else { x }
+      (from: as-coord(from), to: as-coord(to))
+    },
     draw: ((from, to), (a, b)) => {
-      let as-coord(x) = {
-        if type(x) == angle { (x, 1) } else { x }
-      }
-      cetz.draw.bezier(a, b, (rel: as-coord(from), to: a), (rel: as-coord(to), to: b))
+      cetz.draw.bezier(a, b, (rel: from, to: a), (rel: to, to: b))
     },
   ),
   bezier-from: (
     required: ("from",),
     optional: (:),
     n-vertices: 2,
+    validate-args: ((from,)) => {
+      let as-coord(x) = if type(x) == angle { (x, 1) } else { x }
+      (from: as-coord(from))
+    },
     draw: ((from,), (a, b)) => {
-      if type(from) == angle { from = (from, 1) }
       cetz.draw.bezier(a, b, (rel: from, to: a))
     },
   ),
@@ -722,8 +726,11 @@
     required: ("to",),
     optional: (:),
     n-vertices: 2,
+    validate-args: ((to,)) => {
+      let as-coord(x) = if type(x) == angle { (x, 1) } else { x }
+      (to: as-coord(to))
+    },
     draw: ((to,), (a, b)) => {
-      if type(to) == angle { to = (to, 1) }
       cetz.draw.bezier(a, b, (rel: to, to: b))
     },
   ),
@@ -739,9 +746,11 @@
     required: (),
     optional: (loop: 0.3, loop-angle: 0deg),
     n-vertices: 1,
+    validate-args: ((loop, loop-angle)) => {
+      (loop: loop, loop-angle: utils.thing-to-angle(loop-angle))
+    },
     draw: ((loop, loop-angle), (a, ..)) => {
-      let angle = utils.thing-to-angle(loop-angle) + 180deg
-      cetz.draw.arc(a, radius: loop, start: angle, delta: -360deg)
+      cetz.draw.arc(a, radius: loop, start: loop-angle + 180deg, delta: -360deg)
     },
   ),
   corner: (
@@ -801,6 +810,10 @@
         "edge option `draw` must be `auto` when used with "
         spec.required.map(repr).join(", ")
       })
+    }
+
+    if "validate-args" in spec {
+      draw-args = (spec.validate-args)(draw-args)
     }
     options.draw = spec.draw.with(draw-args)
 
