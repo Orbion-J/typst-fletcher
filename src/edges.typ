@@ -5,6 +5,7 @@
 #import "paths.typ"
 #import "nodes.typ" as Nodes
 #import "debug.typ": debug-group, debug-level, get-debug
+#import "edge-kinds.typ": EDGE_KINDS
 
 #let DEFAULT_EDGE_STYLE = (
   stroke: (thickness: 0.048em, cap: "round"),
@@ -354,25 +355,16 @@
 }
 
 #let apply-pre-snapping-adjustments(ctx, edge, snap-objects) = {
-  if edge.edge-kind.name == "loop" {
-
-    let bounds = cetz.process.aabb.aabb(cetz.path-util.bounds(snap-objects.first().first().segments))
-    let approx-radius = cetz.vector.dist(bounds.high, bounds.low)*0.354 // 1/(2√2)
-    let (R, l) = (approx-radius, edge.edge-kind.args.loop)
-      .map(x => cetz.util.resolve-number(ctx, x))
-    let shift = calc.sqrt(R*R + l*l) - l
-    let θ = edge.edge-kind.args.loop-angle
-    let delta = cetz.vector.scale((calc.cos(θ), calc.sin(θ)), shift)
-    edge.vertices = edge.vertices.map(pt => cetz.vector.add(pt, delta))
-    return edge
-  } else {
-    return edge
+  let spec = EDGE_KINDS.at(edge.shape.kind, default: (:))
+  if "pre-snapping-adjust" in spec {
+    return (spec.pre-snapping-adjust)(edge, snap-objects)
   }
+  edge
 }
 
 #let apply-edge-snapping(ctx, edge, drawable, snap-to) = {
   let get-edge-drawable(edge) = {
-    let objs = (edge.draw)(edge.vertices)
+    let objs = (edge.shape.draw)(edge.shape.args, edge.vertices)
     let drawables = cetz.process.element(ctx, objs.first()).drawables
     return drawables.first()
   }
@@ -414,9 +406,10 @@
 
 #let draw-edge(ctx, edge) = {
   let snap-objects = find-snapping-drawables(ctx, ctx.shared-state.fletcher.nodes, edge)
+
   edge = apply-pre-snapping-adjustments(ctx, edge, snap-objects)
 
-  let objs = (edge.draw)(edge.vertices)
+  let objs = (edge.shape.draw)(edge.shape.args, edge.vertices)
   if objs.len() != 1 { utils.error("edge.draw should return a single CeTZ object") }
 
   let (drawables, element) = cetz.process.element(ctx, objs.first())
@@ -583,9 +576,8 @@
   labels: (),
   snap-to: (auto, auto),
   name: none,
-  draw: vertices => none,
+  shape: none,
   crossing: false,
-  edge-kind: none,
   debug: auto,
 ) = cetz.draw.get-ctx(ctx => {
   if "fletcher" not in ctx.shared-state {
@@ -616,13 +608,18 @@
     labels: labels,
     snap-to: snap-to,
     name: name,
-    draw: draw,
+    shape: shape,
     crossing: crossing,
-    edge-kind: edge-kind,
     debug: get-debug(ctx, debug),
   )
 
   edge-data = resolve-edge-styles(ctx, edge-data)
+
+  // resolve edge shape args
+  let spec = EDGE_KINDS.at(edge-data.shape.kind, default: (:))
+  if "validate-args" in spec {
+    edge-data.shape.args = (spec.validate-args)(ctx, edge-data.shape.args)
+  }
 
   if fletcher-ctx.pass == "final" {
     // if edge appears in a flexigrid, interpret coordinates in uv system by default
@@ -680,108 +677,20 @@
   }
 }
 
-#let EDGE_KINDS = (
-  arc: (
-    required: ("bend",),
-    optional: (:),
-    n-vertices: 2,
-    draw: ((bend,), (a, b)) => {
-      let perp-dist = if type(bend) == angle {
-        let sin-bend = calc.sin(bend)
-        if calc.abs(sin-bend) < 1e-3 { return cetz.draw.line(a, b) }
-        let half-chord-len = cetz.vector.dist(a, b) / 2
-        half-chord-len * (1 - calc.cos(bend)) / sin-bend
-      } else {
-        bend
-      }
-      let midpoint = (a: (a, 50%, b), b: a, number: perp-dist, angle: -90deg)
-      cetz.draw.merge-path(cetz.draw.arc-through(a, midpoint, b))
-    },
-  ),
-  bezier-cubic: (
-    required: ("from", "to"),
-    optional: (:),
-    n-vertices: 2,
-    validate-args: ((from, to)) => {
-      let as-coord(x) = if type(x) == angle { (x, 1) } else { x }
-      (from: as-coord(from), to: as-coord(to))
-    },
-    draw: ((from, to), (a, b)) => {
-      cetz.draw.bezier(a, b, (rel: from, to: a), (rel: to, to: b))
-    },
-  ),
-  bezier-from: (
-    required: ("from",),
-    optional: (:),
-    n-vertices: 2,
-    validate-args: ((from,)) => {
-      let as-coord(x) = if type(x) == angle { (x, 1) } else { x }
-      (from: as-coord(from))
-    },
-    draw: ((from,), (a, b)) => {
-      cetz.draw.bezier(a, b, (rel: from, to: a))
-    },
-  ),
-  bezier-to: (
-    required: ("to",),
-    optional: (:),
-    n-vertices: 2,
-    validate-args: ((to,)) => {
-      let as-coord(x) = if type(x) == angle { (x, 1) } else { x }
-      (to: as-coord(to))
-    },
-    draw: ((to,), (a, b)) => {
-      cetz.draw.bezier(a, b, (rel: to, to: b))
-    },
-  ),
-  bezier-through: (
-    required: ("through",),
-    optional: (:),
-    n-vertices: 2,
-    draw: ((through,), (a, b)) => {
-      cetz.draw.bezier-through(a, through, b)
-    },
-  ),
-  loop: (
-    required: (),
-    optional: (loop: 0.3, loop-angle: 0deg),
-    n-vertices: 1,
-    validate-args: ((loop, loop-angle)) => {
-      (loop: loop, loop-angle: utils.thing-to-angle(loop-angle))
-    },
-    draw: ((loop, loop-angle), (a, ..)) => {
-      cetz.draw.arc(a, radius: loop, start: loop-angle + 180deg, delta: -360deg)
-    },
-  ),
-  corner: (
-    required: ("corner",),
-    optional: (:),
-    draw: ((corner,), (a, b)) => {
-      if corner == "|-" {
-        cetz.draw.line(a, (a, "|-", b), b)
-      } else if corner == "-|" {
-        cetz.draw.line(a, (a, "-|", b), b)
-      } else if corner == "-|-" {
-        let mid = (a, 50%, b)
-        cetz.draw.line(a, (a, "-|", mid), (mid, "|-", b), b)
-      } else if corner == "|-|" {
-        let mid = (a, 50%, b)
-        cetz.draw.line(a, (a, "|-", mid), (mid, "-|", b), b)
-      } else {
-        utils.error("edge shape `corner` accepts one of #..0; got #1", ("-|", "|-", "-|-", "|-|"), repr(corner))
-      }
-    },
-  ),
-)
 
 
+/// Deduce the edge kind from the named arguments supplied to `edge()`,
+/// with helpful error reporting for unrecognized options.
+/// This is responsible for handling all other named arguments to `edge()`.
 #let determine-edge-kind(named, options) = {
-  let kind = none
-  let named-arg-suggestion = none
+  let (kind, draw, args) = options.shape
+  if kind != auto { return (:) }
 
+  let named-arg-suggestion = none
   for (spec-kind, spec) in EDGE_KINDS {
+    if "required" not in spec { continue }
     let has-all-required = spec.required.all(n => n in named)
-    let has-some-optional = spec.optional.keys().any(n => n in named)
+    let has-some-optional = spec.at("optional", default: (:)).keys().any(n => n in named)
 
     if spec.required.len() > 0 and has-all-required {
       kind = spec-kind
@@ -794,28 +703,17 @@
     }
   }
 
-  let draw-args = (:)
 
-  if kind != none {
+  if kind != auto {
     let spec = EDGE_KINDS.at(kind)
 
-    for arg in spec.required { draw-args.insert(arg, named.remove(arg)) }
+    for arg in spec.required { args.insert(arg, named.remove(arg)) }
 
     for (arg, default) in spec.optional {
-      if arg in named { draw-args.insert(arg, named.remove(arg)) } else { draw-args.insert(arg, default) }
+      if arg in named { args.insert(arg, named.remove(arg)) } else { args.insert(arg, default) }
     }
 
-    if options.draw != auto {
-      utils.error({
-        "edge option `draw` must be `auto` when used with "
-        spec.required.map(repr).join(", ")
-      })
-    }
-
-    if "validate-args" in spec {
-      draw-args = (spec.validate-args)(draw-args)
-    }
-    options.draw = spec.draw.with(draw-args)
+    draw = spec.draw
 
     let error-wrong-n-vertices() = utils.error({
       kind
@@ -851,16 +749,18 @@
     utils.error("Unknown edge arguments #..0." + hint, named.keys())
   }
 
-  if options.draw == auto {
-    options.draw = vertices => cetz.draw.line(..vertices)
+  // fallback
+  if kind == auto {
+    kind = "line"
+    draw = EDGE_KINDS.line.draw
   }
 
   return (
-    draw: options.draw,
     vertices: options.vertices,
-    edge-kind: (
-      name: kind,
-      args: draw-args,
+    shape: (
+      kind: kind,
+      args: args,
+      draw: draw,
     ),
   )
 }
@@ -1329,14 +1229,6 @@
   /// See also @node.in-math.
   /// -> bool
   in-math: false,
-  /// Function accepting an array of vertices and returning the CeTZ path.
-  ///
-  /// This internal argument isn't meant for normal use.
-  /// It is set automatically depending on the inferred @edge-kinds[edge kind].
-  /// For example, if `bend: 30deg` is given, `draw` defaults
-  /// to `cetz.draw.arc(..)` with appropriate end points.
-  /// -> function
-  draw: auto,
   /// Enable debug annotations for only this edge.
   /// See @debug.edge.
   ///
@@ -1360,8 +1252,12 @@
     crossing: crossing,
     crossing-fill: crossing-fill,
     crossing-thickness: crossing-thickness,
-    draw: draw,
     decorate: decorate,
+    shape: (
+      kind: auto, // edge kind
+      args: (:),  // non-vertex arguments specific to edge kind
+      draw: none, // accepts (args, vertices) and returns a path
+    ),
   )
 
   options += parsing.interpret-edge-positional-args(args.pos(), options)
@@ -1391,6 +1287,7 @@
       ),
     options,
   )
+
   options += determine-edge-kind(named, options)
 
   let args = (
@@ -1412,9 +1309,8 @@
     labels: labels,
     snap-to: options.snap-to,
     name: options.name,
-    draw: options.draw,
+    shape: options.shape,
     crossing: options.crossing,
-    edge-kind: options.edge-kind,
     debug: debug,
   )
 

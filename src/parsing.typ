@@ -208,7 +208,11 @@
 	// First argument is a cetz object
 	if peek(args, utils.is-cetz) {
 		let obj = args.remove(0)
-		new-options.draw = vertices => obj
+		new-options.shape = (
+			kind: "cetz",
+			args: (:),
+			draw: (_, _) => obj
+		)
 		has-cetz-obj = true
 	}
 
