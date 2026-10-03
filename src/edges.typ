@@ -773,6 +773,7 @@
   loop: (
     required: (),
     optional: (loop: 0.3, loop-angle: 0deg),
+    n-vertices: 1,
     draw: ((loop, loop-angle), (a, ..)) => {
       let angle = utils.thing-to-angle(loop-angle) + 180deg
       cetz.draw.arc(a, radius: loop, start: angle, delta: -360deg)
@@ -839,17 +840,24 @@
     }
     options.draw = spec.draw.with(draw-args)
 
+    let error-wrong-n-vertices() = utils.error({
+      kind
+      " edges (with "
+      spec.required.map(repr).join(", ")
+      " arguments) require exactly "
+      repr(spec.n-vertices)
+      " vertices; got "
+      repr(options.vertices)
+    })
+
     if "n-vertices" in spec {
-      if options.vertices.len() != spec.n-vertices {
-        utils.error({
-          kind
-          " edges (with "
-          spec.required.map(repr).join(", ")
-          " arguments) require exactly "
-          repr(spec.n-vertices)
-          " vertices; got "
-          repr(options.vertices)
-        })
+      if spec.n-vertices == 1 {
+        if options.vertices.last() != auto {
+          error-wrong-n-vertices()
+        }
+        options.vertices.last() = ()
+      } else if options.vertices.len() != spec.n-vertices {
+        error-wrong-n-vertices()
       }
     }
   }
@@ -870,7 +878,7 @@
     options.draw = vertices => cetz.draw.line(..vertices)
   }
 
-  return (draw: options.draw)
+  return (draw: options.draw, vertices: options.vertices)
 }
 
 // consumes `label-*` named arguments and validates
