@@ -408,41 +408,6 @@
 }
 
 
-#let edge-anchor-handler(ctx, drawable, default-anchors, it) = {
-  assert(paths.is-drawable(drawable))
-
-  if type(it) == array {
-    it = it.join(".")
-  }
-  if type(it) == str {
-    if it.ends-with("pc") {
-      it = float(it.slice(0, -2))*1%
-    } else if it.ends-with("%") {
-      it = float(it.slice(0, -1))*1%
-    }
-  }
-  if it == "default" { it = 50% }
-  if type(it) == str and it.match(regex(`[\d\.]`.text)) != none {
-    it = float(it)
-  }
-  let named-anchors = default-anchors(())
-  if type(it) == str {
-    if it not in named-anchors {
-      utils.error("no named anchor #0; try #..1", repr(it), named-anchors)
-    }
-    return default-anchors(it)
-  }
-  if type(it) in (length, ratio, relative) {
-    let (pt, vel, accel) = paths.point-on-path-by-length(ctx, drawable.segments, it)
-    return pt
-  } else if type(it) in (int, float) {
-    let (pt, vel, accel) = paths.point-on-path-by-segment(drawable.segments, it)
-    return pt
-  }
-
-  utils.error("invalid edge anchor #0. Try a number, percentage, length, or #..1", repr(it), named-anchors)
-}
-
 #let draw-edge(ctx, edge) = {
 
   let objs = (edge.draw)(edge.vertices)
